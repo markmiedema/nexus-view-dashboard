@@ -1,18 +1,22 @@
-
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Building2, Plus, Users, Calendar } from 'lucide-react';
+import { Building2, Plus, Users, Calendar, Trash2 } from 'lucide-react';
 import { CreateOrganizationModal } from '@/components/CreateOrganizationModal';
+import { DeleteOrganizationDialog } from '@/components/DeleteOrganizationDialog';
+import { useToast } from '@/hooks/use-toast';
 
 const OrganizationList = () => {
-  const { organizations, isLoading, setCurrentOrg } = useOrganization();
+  const { organizations, isLoading, setCurrentOrg, refetchOrganizations } = useOrganization();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [orgToDelete, setOrgToDelete] = useState<any>(null);
 
   const handleOrgSelect = (org: any) => {
     setCurrentOrg(org);
@@ -23,6 +27,36 @@ const OrganizationList = () => {
     setCurrentOrg(newOrg);
     setShowCreateModal(false);
     navigate('/dashboard');
+  };
+
+  const handleDeleteOrg = async (orgId: string) => {
+    try {
+      const { error } = await supabase
+        .from('organisations')
+        .delete()
+        .eq('id', orgId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Organization deleted",
+        description: "The organization has been successfully deleted.",
+      });
+
+      // Refresh the organizations list
+      await refetchOrganizations();
+      
+      // If the deleted org was the current one, clear it
+      setCurrentOrg(null);
+      setOrgToDelete(null);
+    } catch (error) {
+      console.error('Error deleting organization:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete organization. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   if (isLoading) {
@@ -70,16 +104,25 @@ const OrganizationList = () => {
 
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {organizations.map((org) => (
-                <Card 
-                  key={org.id} 
-                  className="cursor-pointer hover:shadow-lg transition-shadow"
-                  onClick={() => handleOrgSelect(org)}
-                >
+                <Card key={org.id} className="relative">
                   <CardHeader className="pb-3">
                     <CardTitle className="flex items-center gap-2">
                       <Building2 className="h-5 w-5 text-blue-500" />
                       {org.name}
                     </CardTitle>
+                    {org.owner_id === user?.id && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="absolute top-2 right-2 h-8 w-8 p-0 text-gray-400 hover:text-red-500"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOrgToDelete(org);
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-2 text-sm text-gray-600">
@@ -92,7 +135,11 @@ const OrganizationList = () => {
                         <span>Created {org.created_at ? new Date(org.created_at).toLocaleDateString() : 'Unknown'}</span>
                       </div>
                     </div>
-                    <Button className="w-full mt-4" variant="outline">
+                    <Button 
+                      className="w-full mt-4" 
+                      variant="outline"
+                      onClick={() => handleOrgSelect(org)}
+                    >
                       Open Dashboard
                     </Button>
                   </CardContent>
@@ -106,6 +153,13 @@ const OrganizationList = () => {
           open={showCreateModal}
           onOpenChange={setShowCreateModal}
           onSuccess={handleCreateSuccess}
+        />
+
+        <DeleteOrganizationDialog
+          organization={orgToDelete}
+          open={!!orgToDelete}
+          onOpenChange={(open) => !open && setOrgToDelete(null)}
+          onConfirm={handleDeleteOrg}
         />
       </div>
     </div>
