@@ -1,4 +1,3 @@
-
 import { useAuth } from '@/hooks/useAuth';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { Button } from '@/components/ui/button';
@@ -8,11 +7,22 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { OrganizationSwitcher } from '@/components/OrganizationSwitcher';
-import { AlertTriangle, TrendingUp, MapPin, DollarSign, Upload, Settings, RefreshCw } from 'lucide-react';
+import { AlertTriangle, TrendingUp, MapPin, DollarSign, Upload, Settings, RefreshCw, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 interface StateWithActivity {
   state: string;
@@ -44,6 +54,7 @@ const Dashboard = () => {
     estimatedLiability: 0,
     salesThisMonth: 0
   });
+  const [isClearingData, setIsClearingData] = useState(false);
 
   useEffect(() => {
     if (currentOrg) {
@@ -307,6 +318,56 @@ const Dashboard = () => {
     }
   };
 
+  const clearAllData = async () => {
+    if (!currentOrg) return;
+
+    setIsClearingData(true);
+    try {
+      console.log('Clearing all data for org:', currentOrg.id);
+      
+      // Delete all sales events for this organization
+      const { error: salesError } = await supabase
+        .from('sales_events')
+        .delete()
+        .eq('org_id', currentOrg.id);
+
+      if (salesError) {
+        console.error('Error deleting sales events:', salesError);
+        throw salesError;
+      }
+
+      // Delete all nexus status records for this organization
+      const { error: nexusError } = await supabase
+        .from('nexus_status')
+        .delete()
+        .eq('org_id', currentOrg.id);
+
+      if (nexusError) {
+        console.error('Error deleting nexus status:', nexusError);
+        throw nexusError;
+      }
+
+      toast({
+        title: "Data cleared successfully",
+        description: "All sales data and nexus analysis have been removed for this organization.",
+      });
+
+      // Refresh the data
+      await fetchDashboardData();
+      await fetchAllStatesData();
+      await fetchSalesEventCount();
+    } catch (error) {
+      console.error('Error clearing data:', error);
+      toast({
+        title: "Error clearing data",
+        description: "There was an error removing the data. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsClearingData(false);
+    }
+  };
+
   const openModal = async (state: StateWithActivity) => {
     setSelectedState(state);
     setIsModalOpen(true);
@@ -472,12 +533,42 @@ const Dashboard = () => {
                     Upload your latest sales CSV to get updated nexus analysis
                   </p>
                 </div>
-                <Button asChild size="lg" className="bg-blue-600 hover:bg-blue-700">
-                  <Link to="/upload">
-                    <Upload className="h-4 w-4 mr-2" />
-                    Upload Data
-                  </Link>
-                </Button>
+                <div className="flex items-center gap-4">
+                  {salesEventCount > 0 && (
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="outline" size="lg" disabled={isClearingData}>
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          {isClearingData ? 'Clearing...' : 'Clear Data'}
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Clear All Data</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This will permanently delete all sales data and nexus analysis for {currentOrg.name}. 
+                            This action cannot be undone. Are you sure you want to continue?
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction 
+                            onClick={clearAllData}
+                            className="bg-red-600 hover:bg-red-700"
+                          >
+                            Yes, Clear All Data
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  )}
+                  <Button asChild size="lg" className="bg-blue-600 hover:bg-blue-700">
+                    <Link to="/upload">
+                      <Upload className="h-4 w-4 mr-2" />
+                      Upload Data
+                    </Link>
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
