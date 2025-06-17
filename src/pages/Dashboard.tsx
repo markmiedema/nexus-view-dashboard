@@ -50,6 +50,7 @@ const Dashboard = () => {
   const [chartData, setChartData] = useState<any[]>([]);
   const [mainChartData, setMainChartData] = useState<any[]>([]);
   const [mainChartState, setMainChartState] = useState<StateWithActivity | null>(null);
+  const [stateThresholds, setStateThresholds] = useState<Map<string, number>>(new Map());
   const [stats, setStats] = useState({
     totalRevenue: 0,
     activeNexusStates: 0,
@@ -60,6 +61,7 @@ const Dashboard = () => {
 
   useEffect(() => {
     if (currentOrg) {
+      fetchStateThresholds();
       fetchDashboardData();
       fetchAllStatesData();
       fetchSalesEventCount();
@@ -78,6 +80,24 @@ const Dashboard = () => {
   const handleOrgSelect = (org: any) => {
     setCurrentOrg(org);
     // Navigate will trigger a re-render with the new currentOrg
+  };
+
+  const fetchStateThresholds = async () => {
+    try {
+      const { data: thresholds, error } = await supabase
+        .from('state_thresholds')
+        .select('state, revenue_threshold');
+
+      if (error) {
+        console.error('Error fetching state thresholds:', error);
+        return;
+      }
+
+      const thresholdMap = new Map(thresholds?.map(t => [t.state, t.revenue_threshold]) || []);
+      setStateThresholds(thresholdMap);
+    } catch (error) {
+      console.error('Error fetching state thresholds:', error);
+    }
   };
 
   const fetchDashboardData = async () => {
@@ -151,18 +171,6 @@ const Dashboard = () => {
         console.error('Error fetching nexus data:', nexusError);
         throw nexusError;
       }
-
-      // Get state thresholds for status calculation
-      const { data: thresholds, error: thresholdError } = await supabase
-        .from('state_thresholds')
-        .select('state, revenue_threshold');
-
-      if (thresholdError) {
-        console.error('Error fetching thresholds:', thresholdError);
-      }
-
-      // Create threshold map
-      const thresholdMap = new Map(thresholds?.map(t => [t.state, t.revenue_threshold]) || []);
 
       // Aggregate sales data by state
       const stateAggregates = new Map<string, { revenue: number; count: number }>();
@@ -388,17 +396,21 @@ const Dashboard = () => {
       return { variant: 'destructive' as const, text: 'Crossed' };
     }
     
-    // For states without nexus records, we need to check if they meet the threshold
-    // This is a simplified check - in a real implementation, you'd want to fetch
-    // the threshold and compare properly
-    const estimatedThreshold = 100000; // Default threshold for demonstration
+    // Get the actual threshold for this state
+    const threshold = stateThresholds.get(state.state) || 100000;
     
-    if (state.total_revenue >= estimatedThreshold) {
+    console.log(`Status check for ${state.state}: revenue=${state.total_revenue}, threshold=${threshold}`);
+    
+    if (state.total_revenue > threshold) {
+      return { variant: 'destructive' as const, text: 'Exceeded' };
+    }
+    
+    if (state.total_revenue >= threshold) {
       return { variant: 'warning' as const, text: 'Met' };
     }
     
     // Check if approaching (e.g., 80% of threshold)
-    if (state.total_revenue >= estimatedThreshold * 0.8) {
+    if (state.total_revenue >= threshold * 0.8) {
       return { variant: 'approaching' as const, text: 'Approaching' };
     }
     
