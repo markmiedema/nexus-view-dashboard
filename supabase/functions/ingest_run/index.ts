@@ -1,10 +1,42 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
+// Header mapping for different CSV formats
+const headerMappings = {
+  // Amount mappings
+  'amount': ['amount', 'sale amount', 'revenue', 'total', 'price'],
+  // Date mappings
+  'transaction_date': ['transaction_date', 'date', 'transaction date', 'sale_date', 'order_date'],
+  // State mappings
+  'ship_to_state': ['ship_to_state', 'state', 'ship state', 'destination_state'],
+  // Transaction ID mappings
+  'transaction_id': ['transaction_id', 'transaction id', 'order_id', 'sale_id', 'id'],
+  // Other mappings
+  'ship_to_zip': ['ship_to_zip', 'zip code', 'zip', 'postal_code'],
+  'ship_to_city': ['ship_to_city', 'city', 'destination_city'],
+  'transaction_type': ['transaction_type', 'type', 'revenue type'],
+  'currency': ['currency', 'curr'],
+  'provider': ['provider', 'platform', 'source'],
+  'marketplace_facilitator': ['marketplace_facilitator', 'marketplace facilitator', 'facilitator'],
+  'customer_id': ['customer_id', 'customer id', 'buyer_id'],
+  'exemption_type': ['exemption_type', 'exemption certificate', 'exempt'],
+  'shipping': ['shipping', 'ship_cost', 'delivery_fee'],
+  'sales_tax': ['sales_tax', 'tax', 'tax_amount']
+}
+
+function findHeaderIndex(headers: string[], fieldMappings: string[]): number {
+  const normalizedHeaders = headers.map(h => h.toLowerCase().trim());
+  
+  for (const mapping of fieldMappings) {
+    const index = normalizedHeaders.indexOf(mapping.toLowerCase());
+    if (index !== -1) return index;
+  }
+  return -1;
 }
 
 serve(async (req) => {
@@ -40,6 +72,15 @@ serve(async (req) => {
     console.log('CSV headers:', headers)
     console.log('Total lines:', lines.length - 1)
 
+    // Create header index mappings
+    const headerIndexes: Record<string, number> = {}
+    
+    for (const [field, mappings] of Object.entries(headerMappings)) {
+      headerIndexes[field] = findHeaderIndex(headers, mappings);
+    }
+
+    console.log('Header mappings found:', headerIndexes)
+
     // Parse CSV rows and insert into sales_events
     const salesEvents = []
     
@@ -49,20 +90,35 @@ serve(async (req) => {
       if (values.length >= headers.length) {
         const event = {
           org_id: org_id,
-          transaction_id: values[headers.indexOf('transaction_id')] || `tx_${i}`,
-          transaction_date: values[headers.indexOf('transaction_date')] || new Date().toISOString(),
-          transaction_type: values[headers.indexOf('transaction_type')] || 'sale',
-          amount: parseFloat(values[headers.indexOf('amount')] || '0'),
-          shipping: parseFloat(values[headers.indexOf('shipping')] || '0'),
-          sales_tax: parseFloat(values[headers.indexOf('sales_tax')] || '0'),
-          currency: values[headers.indexOf('currency')] || 'USD',
-          provider: values[headers.indexOf('provider')] || 'unknown',
-          marketplace_facilitator: values[headers.indexOf('marketplace_facilitator')] === 'true',
-          customer_id: values[headers.indexOf('customer_id')] || null,
-          exemption_type: values[headers.indexOf('exemption_type')] || 'non_exempt',
-          ship_to_state: values[headers.indexOf('ship_to_state')] || 'CA',
-          ship_to_zip: values[headers.indexOf('ship_to_zip')] || null,
-          ship_to_city: values[headers.indexOf('ship_to_city')] || null
+          transaction_id: headerIndexes.transaction_id >= 0 ? 
+            (values[headerIndexes.transaction_id] || `tx_${i}`) : `tx_${i}`,
+          transaction_date: headerIndexes.transaction_date >= 0 ? 
+            (values[headerIndexes.transaction_date] || new Date().toISOString()) : new Date().toISOString(),
+          transaction_type: headerIndexes.transaction_type >= 0 ? 
+            (values[headerIndexes.transaction_type] || 'sale') : 'sale',
+          amount: headerIndexes.amount >= 0 ? 
+            parseFloat(values[headerIndexes.amount]?.replace(/[$,]/g, '') || '0') : 0,
+          shipping: headerIndexes.shipping >= 0 ? 
+            parseFloat(values[headerIndexes.shipping]?.replace(/[$,]/g, '') || '0') : 0,
+          sales_tax: headerIndexes.sales_tax >= 0 ? 
+            parseFloat(values[headerIndexes.sales_tax]?.replace(/[$,]/g, '') || '0') : 0,
+          currency: headerIndexes.currency >= 0 ? 
+            (values[headerIndexes.currency] || 'USD') : 'USD',
+          provider: headerIndexes.provider >= 0 ? 
+            (values[headerIndexes.provider] || 'unknown') : 'unknown',
+          marketplace_facilitator: headerIndexes.marketplace_facilitator >= 0 ? 
+            (values[headerIndexes.marketplace_facilitator]?.toLowerCase() === 'true' || 
+             values[headerIndexes.marketplace_facilitator]?.toLowerCase() === 'yes') : false,
+          customer_id: headerIndexes.customer_id >= 0 ? 
+            (values[headerIndexes.customer_id] || null) : null,
+          exemption_type: headerIndexes.exemption_type >= 0 ? 
+            (values[headerIndexes.exemption_type] || 'non_exempt') : 'non_exempt',
+          ship_to_state: headerIndexes.ship_to_state >= 0 ? 
+            (values[headerIndexes.ship_to_state] || 'CA') : 'CA',
+          ship_to_zip: headerIndexes.ship_to_zip >= 0 ? 
+            (values[headerIndexes.ship_to_zip] || null) : null,
+          ship_to_city: headerIndexes.ship_to_city >= 0 ? 
+            (values[headerIndexes.ship_to_city] || null) : null
         }
         
         salesEvents.push(event)
@@ -70,6 +126,7 @@ serve(async (req) => {
     }
 
     console.log('Parsed sales events:', salesEvents.length)
+    console.log('Sample event:', salesEvents[0])
 
     // Insert sales events into database
     const { data: insertedData, error: insertError } = await supabase
