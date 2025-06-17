@@ -1,7 +1,5 @@
 
-import { useState, useEffect } from 'react';
-import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
+import { useOrganization } from '@/contexts/OrganizationContext';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -11,57 +9,17 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Building2, ChevronDown } from 'lucide-react';
 
-interface Organization {
-  id: string;
-  name: string;
-  owner_id: string;
-  role?: string;
-}
-
 export const OrganizationSwitcher = () => {
-  const { user } = useAuth();
-  const [organizations, setOrganizations] = useState<Organization[]>([]);
-  const [currentOrg, setCurrentOrg] = useState<Organization | null>(null);
+  const { currentOrg, organizations, setCurrentOrg, isLoading } = useOrganization();
 
-  useEffect(() => {
-    fetchOrganizations();
-  }, [user]);
-
-  const fetchOrganizations = async () => {
-    if (!user) return;
-
-    try {
-      // Fetch organizations through memberships table
-      const { data, error } = await supabase
-        .from('memberships')
-        .select(`
-          role,
-          organisations (
-            id,
-            name,
-            owner_id
-          )
-        `)
-        .eq('user_id', user.id);
-
-      if (error) throw error;
-      
-      // Transform the data to include role information
-      const orgs = (data || []).map(membership => ({
-        ...membership.organisations,
-        role: membership.role
-      })).filter(org => org.id); // Filter out any null organizations
-      
-      console.log('Fetched organizations:', orgs);
-      setOrganizations(orgs);
-      
-      if (orgs && orgs.length > 0) {
-        setCurrentOrg(orgs[0]);
-      }
-    } catch (error) {
-      console.error('Error fetching organizations:', error);
-    }
-  };
+  if (isLoading) {
+    return (
+      <Button variant="ghost" className="flex items-center gap-2">
+        <Building2 className="h-4 w-4" />
+        Loading...
+      </Button>
+    );
+  }
 
   if (!currentOrg) {
     return (

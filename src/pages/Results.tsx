@@ -1,6 +1,6 @@
-
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { useOrganization } from '@/contexts/OrganizationContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -22,6 +22,7 @@ interface NexusStatus {
 
 const Results = () => {
   const { user } = useAuth();
+  const { currentOrg } = useOrganization();
   const { toast } = useToast();
   const [nexusData, setNexusData] = useState<NexusStatus[]>([]);
   const [selectedState, setSelectedState] = useState<NexusStatus | null>(null);
@@ -31,19 +32,21 @@ const Results = () => {
   const [isRecomputing, setIsRecomputing] = useState(false);
 
   useEffect(() => {
-    fetchNexusData();
-    fetchSalesEventCount();
-  }, [user]);
+    if (currentOrg) {
+      fetchNexusData();
+      fetchSalesEventCount();
+    }
+  }, [currentOrg]);
 
   const fetchNexusData = async () => {
-    if (!user) return;
+    if (!currentOrg) return;
 
     try {
-      console.log('Fetching nexus data for user:', user.id);
+      console.log('Fetching nexus data for org:', currentOrg.id);
       const { data, error } = await supabase
         .from('nexus_status')
         .select('*')
-        .eq('org_id', user.id)
+        .eq('org_id', currentOrg.id)
         .order('state');
 
       if (error) {
@@ -66,13 +69,13 @@ const Results = () => {
   };
 
   const fetchSalesEventCount = async () => {
-    if (!user) return;
+    if (!currentOrg) return;
 
     try {
       const { count, error } = await supabase
         .from('sales_events')
         .select('*', { count: 'exact', head: true })
-        .eq('org_id', user.id);
+        .eq('org_id', currentOrg.id);
 
       if (error) throw error;
       setSalesEventCount(count || 0);
@@ -83,13 +86,13 @@ const Results = () => {
   };
 
   const recomputeNexus = async () => {
-    if (!user) return;
+    if (!currentOrg) return;
 
     setIsRecomputing(true);
     try {
-      console.log('Recomputing nexus for user:', user.id);
+      console.log('Recomputing nexus for org:', currentOrg.id);
       const { error } = await supabase.rpc('compute_nexus', {
-        p_org: user.id
+        p_org: currentOrg.id
       });
 
       if (error) {
@@ -131,6 +134,20 @@ const Results = () => {
     }));
   };
 
+  if (!currentOrg) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">No Organization Selected</h2>
+          <p className="text-gray-600 mb-6">Please select an organization to view results.</p>
+          <Button onClick={() => window.location.href = '/dashboard'}>
+            Go to Dashboard
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -146,7 +163,7 @@ const Results = () => {
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-7xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Nexus Analysis Results</h1>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Nexus Analysis Results - {currentOrg.name}</h1>
           <p className="text-gray-600">Review your sales tax nexus status by state</p>
           
           {/* Status Information */}
