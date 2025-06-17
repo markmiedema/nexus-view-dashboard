@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { MapPin, TrendingUp, AlertTriangle } from 'lucide-react';
+import { MapPin, TrendingUp, AlertTriangle, RefreshCw } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 interface NexusStatus {
   state: string;
@@ -21,31 +22,97 @@ interface NexusStatus {
 
 const Results = () => {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [nexusData, setNexusData] = useState<NexusStatus[]>([]);
   const [selectedState, setSelectedState] = useState<NexusStatus | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [salesEventCount, setSalesEventCount] = useState(0);
+  const [isRecomputing, setIsRecomputing] = useState(false);
 
   useEffect(() => {
     fetchNexusData();
+    fetchSalesEventCount();
   }, [user]);
 
   const fetchNexusData = async () => {
     if (!user) return;
 
     try {
+      console.log('Fetching nexus data for user:', user.id);
       const { data, error } = await supabase
         .from('nexus_status')
         .select('*')
         .eq('org_id', user.id)
         .order('state');
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching nexus data:', error);
+        throw error;
+      }
+      
+      console.log('Nexus data received:', data);
       setNexusData(data || []);
     } catch (error) {
       console.error('Error fetching nexus data:', error);
+      toast({
+        title: "Error loading results",
+        description: "There was an error loading your nexus analysis results.",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchSalesEventCount = async () => {
+    if (!user) return;
+
+    try {
+      const { count, error } = await supabase
+        .from('sales_events')
+        .select('*', { count: 'exact', head: true })
+        .eq('org_id', user.id);
+
+      if (error) throw error;
+      setSalesEventCount(count || 0);
+      console.log('Sales events count:', count);
+    } catch (error) {
+      console.error('Error fetching sales events count:', error);
+    }
+  };
+
+  const recomputeNexus = async () => {
+    if (!user) return;
+
+    setIsRecomputing(true);
+    try {
+      console.log('Recomputing nexus for user:', user.id);
+      const { error } = await supabase.rpc('compute_nexus', {
+        p_org: user.id
+      });
+
+      if (error) {
+        console.error('Error recomputing nexus:', error);
+        throw error;
+      }
+
+      toast({
+        title: "Analysis updated",
+        description: "Nexus analysis has been recomputed successfully.",
+      });
+
+      // Refresh the data
+      await fetchNexusData();
+    } catch (error) {
+      console.error('Error recomputing nexus:', error);
+      toast({
+        title: "Error recomputing analysis",
+        description: "There was an error updating your nexus analysis.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsRecomputing(false);
     }
   };
 
@@ -81,67 +148,122 @@ const Results = () => {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Nexus Analysis Results</h1>
           <p className="text-gray-600">Review your sales tax nexus status by state</p>
+          
+          {/* Status Information */}
+          <div className="mt-4 flex flex-wrap gap-4 text-sm">
+            <div className="bg-blue-100 px-3 py-1 rounded-full">
+              <span className="text-blue-800">Sales Events: {salesEventCount}</span>
+            </div>
+            <div className="bg-green-100 px-3 py-1 rounded-full">
+              <span className="text-green-800">States Analyzed: {nexusData.length}</span>
+            </div>
+            <div className="bg-orange-100 px-3 py-1 rounded-full">
+              <span className="text-orange-800">
+                Nexus Crossed: {nexusData.filter(s => s.crossed_at).length}
+              </span>
+            </div>
+          </div>
         </div>
 
         <Card className="rounded-2xl shadow-lg">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <MapPin className="h-5 w-5" />
-              Nexus Status by State
+            <CardTitle className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <MapPin className="h-5 w-5" />
+                Nexus Status by State
+              </div>
+              <Button 
+                onClick={recomputeNexus} 
+                disabled={isRecomputing}
+                variant="outline"
+                size="sm"
+              >
+                <RefreshCw className={`h-4 w-4 mr-2 ${isRecomputing ? 'animate-spin' : ''}`} />
+                {isRecomputing ? 'Recomputing...' : 'Refresh Analysis'}
+              </Button>
             </CardTitle>
             <CardDescription>
-              Click on any row to view detailed analysis
+              {nexusData.length > 0 
+                ? "Click on any row to view detailed analysis"
+                : "No nexus analysis data found. Try refreshing the analysis or uploading sales data."
+              }
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader className="sticky top-0 bg-white">
-                  <TableRow>
-                    <TableHead>State</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Crossed Date</TableHead>
-                    <TableHead>Triggered By</TableHead>
-                    <TableHead>Est. Liability</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {nexusData.map((state, index) => (
-                    <TableRow 
-                      key={state.state}
-                      className={`hover:bg-gray-50 cursor-pointer ${index % 2 === 0 ? 'bg-gray-25' : ''}`}
-                      onClick={() => openModal(state)}
-                    >
-                      <TableCell className="font-medium">{state.state}</TableCell>
-                      <TableCell>
-                        <Badge variant={state.crossed_at ? 'destructive' : 'secondary'}>
-                          {state.crossed_at ? 'Crossed' : 'Monitoring'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {state.crossed_at ? new Date(state.crossed_at).toLocaleDateString() : '-'}
-                      </TableCell>
-                      <TableCell>
-                        {state.crossed_by ? (
-                          <Badge variant="outline">
-                            {state.crossed_by}
-                          </Badge>
-                        ) : '-'}
-                      </TableCell>
-                      <TableCell>
-                        {state.est_liability ? `$${state.est_liability.toLocaleString()}` : '-'}
-                      </TableCell>
-                      <TableCell>
-                        <Button variant="outline" size="sm">
-                          View Details
-                        </Button>
-                      </TableCell>
+            {nexusData.length === 0 ? (
+              <div className="text-center py-12">
+                <AlertTriangle className="h-12 w-12 text-yellow-500 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">No Analysis Results</h3>
+                <p className="text-gray-600 mb-4">
+                  {salesEventCount === 0 
+                    ? "No sales data found. Please upload your sales data first."
+                    : "Analysis data not found. The compute_nexus function may need to be run."
+                  }
+                </p>
+                <div className="space-y-2">
+                  <Button onClick={recomputeNexus} disabled={isRecomputing}>
+                    <RefreshCw className={`h-4 w-4 mr-2 ${isRecomputing ? 'animate-spin' : ''}`} />
+                    {isRecomputing ? 'Computing...' : 'Run Analysis'}
+                  </Button>
+                  {salesEventCount === 0 && (
+                    <div>
+                      <Button variant="outline" onClick={() => window.location.href = '/upload'}>
+                        Upload Sales Data
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader className="sticky top-0 bg-white">
+                    <TableRow>
+                      <TableHead>State</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Crossed Date</TableHead>
+                      <TableHead>Triggered By</TableHead>
+                      <TableHead>Est. Liability</TableHead>
+                      <TableHead>Actions</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                  </TableHeader>
+                  <TableBody>
+                    {nexusData.map((state, index) => (
+                      <TableRow 
+                        key={state.state}
+                        className={`hover:bg-gray-50 cursor-pointer ${index % 2 === 0 ? 'bg-gray-25' : ''}`}
+                        onClick={() => openModal(state)}
+                      >
+                        <TableCell className="font-medium">{state.state}</TableCell>
+                        <TableCell>
+                          <Badge variant={state.crossed_at ? 'destructive' : 'secondary'}>
+                            {state.crossed_at ? 'Crossed' : 'Monitoring'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {state.crossed_at ? new Date(state.crossed_at).toLocaleDateString() : '-'}
+                        </TableCell>
+                        <TableCell>
+                          {state.crossed_by ? (
+                            <Badge variant="outline">
+                              {state.crossed_by}
+                            </Badge>
+                          ) : '-'}
+                        </TableCell>
+                        <TableCell>
+                          {state.est_liability ? `$${state.est_liability.toLocaleString()}` : '-'}
+                        </TableCell>
+                        <TableCell>
+                          <Button variant="outline" size="sm">
+                            View Details
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
           </CardContent>
         </Card>
 
