@@ -3,7 +3,9 @@ import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { AlertTriangle, TrendingUp, MapPin, DollarSign } from 'lucide-react';
+import { OrganizationSwitcher } from '@/components/OrganizationSwitcher';
+import { AlertTriangle, TrendingUp, MapPin, DollarSign, Upload } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 const Dashboard = () => {
   const { user, signOut } = useAuth();
@@ -33,8 +35,9 @@ const Dashboard = () => {
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
+            <div className="flex items-center gap-4">
               <h1 className="text-xl font-semibold text-gray-900">Nexus Tracker</h1>
+              <OrganizationSwitcher />
             </div>
             <div className="flex items-center space-x-4">
               <span className="text-sm text-gray-600">
@@ -56,31 +59,20 @@ const Dashboard = () => {
 
         {/* Stats Overview */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <Card>
+          <Card className="rounded-2xl shadow-lg">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">${stats.totalRevenue.toLocaleString()}</div>
-              <p className="text-xs text-muted-foreground">All time</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Active Nexus States</CardTitle>
+              <CardTitle className="text-sm font-medium">States Crossed</CardTitle>
               <MapPin className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats.activeNexusStates}</div>
-              <p className="text-xs text-muted-foreground">Compliance required</p>
+              <p className="text-xs text-muted-foreground">Active nexus states</p>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="rounded-2xl shadow-lg">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Estimated Liability</CardTitle>
+              <CardTitle className="text-sm font-medium">Est. Liability</CardTitle>
               <AlertTriangle className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
@@ -89,10 +81,21 @@ const Dashboard = () => {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="rounded-2xl shadow-lg">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Last Run</CardTitle>
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">Today</div>
+              <p className="text-xs text-muted-foreground">Analysis completed</p>
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-2xl shadow-lg">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">This Month</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">${stats.salesThisMonth.toLocaleString()}</div>
@@ -101,9 +104,33 @@ const Dashboard = () => {
           </Card>
         </div>
 
+        {/* CTA Section */}
+        <div className="mb-8">
+          <Card className="rounded-2xl shadow-lg border-gradient bg-gradient-to-r from-blue-50 to-indigo-50">
+            <CardContent className="p-8">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                    Ready to upload new sales data?
+                  </h3>
+                  <p className="text-gray-600">
+                    Upload your latest sales CSV to get updated nexus analysis
+                  </p>
+                </div>
+                <Button asChild size="lg" className="bg-blue-600 hover:bg-blue-700">
+                  <Link to="/upload">
+                    <Upload className="h-4 w-4 mr-2" />
+                    Upload Data
+                  </Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Nexus Status */}
-          <Card>
+          <Card className="rounded-2xl shadow-lg">
             <CardHeader>
               <CardTitle>Nexus Status by State</CardTitle>
               <CardDescription>Current nexus obligations and thresholds</CardDescription>
@@ -111,7 +138,7 @@ const Dashboard = () => {
             <CardContent>
               <div className="space-y-4">
                 {nexusStates.map((state) => (
-                  <div key={state.state} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div key={state.state} className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50">
                     <div className="flex items-center space-x-3">
                       <div className="font-medium">{state.state}</div>
                       <Badge variant={state.status === 'Active' ? 'destructive' : 'secondary'}>
@@ -133,7 +160,7 @@ const Dashboard = () => {
           </Card>
 
           {/* Recent Sales */}
-          <Card>
+          <Card className="rounded-2xl shadow-lg">
             <CardHeader>
               <CardTitle>Recent Sales Activity</CardTitle>
               <CardDescription>Latest transactions across all states</CardDescription>
@@ -141,7 +168,7 @@ const Dashboard = () => {
             <CardContent>
               <div className="space-y-4">
                 {recentSales.map((sale, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div key={index} className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50">
                     <div>
                       <div className="font-medium">${sale.amount.toFixed(2)}</div>
                       <div className="text-sm text-gray-500">{sale.date}</div>
@@ -154,32 +181,6 @@ const Dashboard = () => {
                     </div>
                   </div>
                 ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Quick Actions */}
-        <div className="mt-8">
-          <Card>
-            <CardHeader>
-              <CardTitle>Quick Actions</CardTitle>
-              <CardDescription>Common tasks and reports</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Button variant="outline" className="h-20 flex flex-col items-center justify-center space-y-2">
-                  <TrendingUp className="h-5 w-5" />
-                  <span>Upload Sales Data</span>
-                </Button>
-                <Button variant="outline" className="h-20 flex flex-col items-center justify-center space-y-2">
-                  <MapPin className="h-5 w-5" />
-                  <span>Review Nexus Status</span>
-                </Button>
-                <Button variant="outline" className="h-20 flex flex-col items-center justify-center space-y-2">
-                  <DollarSign className="h-5 w-5" />
-                  <span>Generate Report</span>
-                </Button>
               </div>
             </CardContent>
           </Card>
