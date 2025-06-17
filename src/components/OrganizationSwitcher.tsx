@@ -15,6 +15,7 @@ interface Organization {
   id: string;
   name: string;
   owner_id: string;
+  role?: string;
 }
 
 export const OrganizationSwitcher = () => {
@@ -30,16 +31,32 @@ export const OrganizationSwitcher = () => {
     if (!user) return;
 
     try {
+      // Fetch organizations through memberships table
       const { data, error } = await supabase
-        .from('organisations')
-        .select('*')
-        .eq('owner_id', user.id);
+        .from('memberships')
+        .select(`
+          role,
+          organisations (
+            id,
+            name,
+            owner_id
+          )
+        `)
+        .eq('user_id', user.id);
 
       if (error) throw error;
       
-      setOrganizations(data || []);
-      if (data && data.length > 0) {
-        setCurrentOrg(data[0]);
+      // Transform the data to include role information
+      const orgs = (data || []).map(membership => ({
+        ...membership.organisations,
+        role: membership.role
+      })).filter(org => org.id); // Filter out any null organizations
+      
+      console.log('Fetched organizations:', orgs);
+      setOrganizations(orgs);
+      
+      if (orgs && orgs.length > 0) {
+        setCurrentOrg(orgs[0]);
       }
     } catch (error) {
       console.error('Error fetching organizations:', error);
@@ -71,8 +88,15 @@ export const OrganizationSwitcher = () => {
             onClick={() => setCurrentOrg(org)}
             className={currentOrg.id === org.id ? 'bg-blue-50' : ''}
           >
-            <Building2 className="h-4 w-4 mr-2" />
-            {org.name}
+            <div className="flex items-center justify-between w-full">
+              <div className="flex items-center">
+                <Building2 className="h-4 w-4 mr-2" />
+                {org.name}
+              </div>
+              <span className="text-xs text-gray-500 capitalize">
+                {org.role}
+              </span>
+            </div>
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>
