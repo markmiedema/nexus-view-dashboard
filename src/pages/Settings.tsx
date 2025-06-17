@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Users, Mail, UserPlus } from 'lucide-react';
+import { Users, Mail, UserPlus, Building2, Plus } from 'lucide-react';
 
 interface TeamMember {
   id: string;
@@ -18,17 +18,45 @@ interface TeamMember {
   avatar_url?: string;
 }
 
+interface Organization {
+  id: string;
+  name: string;
+  owner_id: string;
+  created_at: string;
+}
+
 const Settings = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [inviteEmail, setInviteEmail] = useState('');
+  const [newOrgName, setNewOrgName] = useState('');
   const [loading, setLoading] = useState(true);
   const [inviting, setInviting] = useState(false);
+  const [creatingOrg, setCreatingOrg] = useState(false);
 
   useEffect(() => {
     fetchTeamMembers();
+    fetchOrganizations();
   }, [user]);
+
+  const fetchOrganizations = async () => {
+    if (!user) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('organisations')
+        .select('*')
+        .eq('owner_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setOrganizations(data || []);
+    } catch (error) {
+      console.error('Error fetching organizations:', error);
+    }
+  };
 
   const fetchTeamMembers = async () => {
     if (!user) return;
@@ -64,6 +92,44 @@ const Settings = () => {
       console.error('Error fetching team members:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCreateOrganization = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newOrgName.trim() || !user) return;
+
+    setCreatingOrg(true);
+    try {
+      const { data, error } = await supabase
+        .from('organisations')
+        .insert([
+          {
+            name: newOrgName.trim(),
+            owner_id: user.id
+          }
+        ])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      toast({
+        title: "Organization created!",
+        description: `${newOrgName} has been created successfully.`,
+      });
+      
+      setNewOrgName('');
+      fetchOrganizations(); // Refresh the list
+    } catch (error) {
+      console.error('Error creating organization:', error);
+      toast({
+        title: "Error",
+        description: "Failed to create organization. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setCreatingOrg(false);
     }
   };
 
@@ -119,10 +185,79 @@ const Settings = () => {
       <div className="max-w-4xl mx-auto">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Settings</h1>
-          <p className="text-gray-600">Manage your team and organization settings</p>
+          <p className="text-gray-600">Manage your organizations and team settings</p>
         </div>
 
         <div className="grid gap-6">
+          {/* Create Organization */}
+          <Card className="rounded-2xl shadow-lg">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Plus className="h-5 w-5" />
+                Create Organization
+              </CardTitle>
+              <CardDescription>
+                Create a new organization to manage your business data
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleCreateOrganization} className="space-y-4">
+                <div>
+                  <Label htmlFor="orgName">Organization Name</Label>
+                  <Input
+                    id="orgName"
+                    type="text"
+                    placeholder="My Company Inc."
+                    value={newOrgName}
+                    onChange={(e) => setNewOrgName(e.target.value)}
+                    required
+                  />
+                </div>
+                <Button type="submit" disabled={creatingOrg}>
+                  <Building2 className="h-4 w-4 mr-2" />
+                  {creatingOrg ? 'Creating...' : 'Create Organization'}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+
+          {/* Your Organizations */}
+          <Card className="rounded-2xl shadow-lg">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Building2 className="h-5 w-5" />
+                Your Organizations
+              </CardTitle>
+              <CardDescription>
+                Organizations you own and manage
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {organizations.length === 0 ? (
+                  <p className="text-gray-500 text-center py-8">
+                    No organizations yet. Create your first organization above.
+                  </p>
+                ) : (
+                  organizations.map((org) => (
+                    <div key={org.id} className="flex items-center justify-between p-4 border rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <Building2 className="h-8 w-8 text-blue-500" />
+                        <div>
+                          <div className="font-medium">{org.name}</div>
+                          <div className="text-sm text-gray-500">
+                            Created {new Date(org.created_at).toLocaleDateString()}
+                          </div>
+                        </div>
+                      </div>
+                      <Badge variant="default">Owner</Badge>
+                    </div>
+                  ))
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Team Members */}
           <Card className="rounded-2xl shadow-lg">
             <CardHeader>
