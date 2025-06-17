@@ -1,4 +1,3 @@
-
 import { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { useNavigate } from 'react-router-dom';
@@ -55,8 +54,8 @@ const UploadPage = () => {
         description: `Inserted ${data.inserted} rows • States crossed: ${data.states_crossed.join(', ')}`,
       });
 
-      // 4. Redirect to results
-      navigate('/results');
+      // 4. Redirect to dashboard
+      navigate('/dashboard');
 
     } catch (error) {
       console.error('Upload error:', error);

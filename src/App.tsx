@@ -10,7 +10,6 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Upload from "./pages/Upload";
-import Results from "./pages/Results";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 import { ProtectedRoute } from "./components/ProtectedRoute";
@@ -32,11 +31,6 @@ function AppRoutes() {
       <Route path="/upload" element={
         <ProtectedRoute>
           <Upload />
-        </ProtectedRoute>
-      } />
-      <Route path="/results" element={
-        <ProtectedRoute>
-          <Results />
         </ProtectedRoute>
       } />
       <Route path="/settings" element={
