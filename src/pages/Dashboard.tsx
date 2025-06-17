@@ -768,31 +768,31 @@ const Dashboard = () => {
           </Card>
         )}
 
-        {/* Revenue vs Threshold Chart - Full Width */}
-        <Card className="rounded-2xl shadow-lg">
-          <CardHeader>
-            <CardTitle className="text-lg">Revenue vs Threshold</CardTitle>
-            <CardDescription>
-              {mainChartState ? (
-                <>
-                  Cumulative revenue progression for {mainChartState.state}.
-                  {mainChartData.length > 0 && (
-                    <>
-                      {mainChartData.some(point => point.exceedsThreshold) 
-                        ? " Nexus threshold has been exceeded." 
-                        : mainChartData.some(point => point.meetsThreshold)
-                        ? " Revenue meets but has not exceeded the nexus threshold."
-                        : " Revenue has not reached the nexus threshold."}
-                    </>
-                  )}
-                </>
-              ) : (
-                "No sales data available for chart display"
-              )}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {mainChartData.length > 0 ? (
+        {/* Revenue vs Threshold Chart - Only show if there's sales data */}
+        {salesEventCount > 0 && mainChartData.length > 0 && (
+          <Card className="rounded-2xl shadow-lg">
+            <CardHeader>
+              <CardTitle className="text-lg">Revenue vs Threshold</CardTitle>
+              <CardDescription>
+                {mainChartState ? (
+                  <>
+                    Cumulative revenue progression for {mainChartState.state}.
+                    {mainChartData.length > 0 && (
+                      <>
+                        {mainChartData.some(point => point.exceedsThreshold) 
+                          ? " Nexus threshold has been exceeded." 
+                          : mainChartData.some(point => point.meetsThreshold)
+                          ? " Revenue meets but has not exceeded the nexus threshold."
+                          : " Revenue has not reached the nexus threshold."}
+                      </>
+                    )}
+                  </>
+                ) : (
+                  "No sales data available for chart display"
+                )}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
               <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={mainChartData} margin={{ top: 20, right: 30, left: 40, bottom: 60 }}>
@@ -860,13 +860,9 @@ const Dashboard = () => {
                   </LineChart>
                 </ResponsiveContainer>
               </div>
-            ) : (
-              <div className="text-center py-8 text-gray-500">
-                No chart data available for this organization
-              </div>
-            )}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Modal with chart */}
         <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
