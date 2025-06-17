@@ -138,7 +138,10 @@ const UploadPage = () => {
 
             {!isUploading && (
               <div className="mt-6 flex justify-center">
-                <Button onClick={() => document.querySelector('input[type="file"]')?.click()}>
+                <Button onClick={() => {
+                  const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+                  input?.click();
+                }}>
                   Select File
                 </Button>
               </div>

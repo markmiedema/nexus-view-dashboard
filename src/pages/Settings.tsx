@@ -14,10 +14,8 @@ interface TeamMember {
   id: string;
   user_id: string;
   role: string;
-  profiles?: {
-    full_name: string | null;
-    avatar_url: string | null;
-  };
+  full_name?: string;
+  avatar_url?: string;
 }
 
 const Settings = () => {
@@ -36,21 +34,32 @@ const Settings = () => {
     if (!user) return;
 
     try {
-      const { data, error } = await supabase
+      // First get memberships
+      const { data: memberships, error: membershipsError } = await supabase
         .from('memberships')
-        .select(`
-          id,
-          user_id,
-          role,
-          profiles (
-            full_name,
-            avatar_url
-          )
-        `)
+        .select('*')
         .eq('org_id', user.id);
 
-      if (error) throw error;
-      setTeamMembers(data || []);
+      if (membershipsError) throw membershipsError;
+
+      // Then get profile data for each member
+      const membersWithProfiles = await Promise.all(
+        (memberships || []).map(async (membership) => {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('full_name, avatar_url')
+            .eq('id', membership.user_id)
+            .single();
+
+          return {
+            ...membership,
+            full_name: profile?.full_name || 'Unknown User',
+            avatar_url: profile?.avatar_url || null
+          };
+        })
+      );
+
+      setTeamMembers(membersWithProfiles);
     } catch (error) {
       console.error('Error fetching team members:', error);
     } finally {
@@ -131,9 +140,9 @@ const Settings = () => {
                   <div key={member.id} className="flex items-center justify-between p-4 border rounded-lg">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
-                        {member.profiles?.avatar_url ? (
+                        {member.avatar_url ? (
                           <img 
-                            src={member.profiles.avatar_url} 
+                            src={member.avatar_url} 
                             alt="Avatar" 
                             className="w-10 h-10 rounded-full"
                           />
@@ -143,7 +152,7 @@ const Settings = () => {
                       </div>
                       <div>
                         <div className="font-medium">
-                          {member.profiles?.full_name || 'Unknown User'}
+                          {member.full_name}
                         </div>
                         <div className="text-sm text-gray-500">
                           {member.user_id}
