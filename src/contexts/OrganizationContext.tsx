@@ -7,6 +7,7 @@ interface Organization {
   id: string;
   name: string;
   owner_id: string;
+  created_at?: string;
   role?: string;
 }
 
@@ -50,7 +51,8 @@ export const OrganizationProvider = ({ children }: { children: ReactNode }) => {
           organisations (
             id,
             name,
-            owner_id
+            owner_id,
+            created_at
           )
         `)
         .eq('user_id', user.id);

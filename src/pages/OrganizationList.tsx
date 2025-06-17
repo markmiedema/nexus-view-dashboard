@@ -89,7 +89,7 @@ const OrganizationList = () => {
                       </div>
                       <div className="flex items-center gap-2">
                         <Calendar className="h-4 w-4" />
-                        <span>Created {new Date(org.created_at || Date.now()).toLocaleDateString()}</span>
+                        <span>Created {org.created_at ? new Date(org.created_at).toLocaleDateString() : 'Unknown'}</span>
                       </div>
                     </div>
                     <Button className="w-full mt-4" variant="outline">
