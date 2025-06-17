@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrganization } from '@/contexts/OrganizationContext';
@@ -20,12 +21,24 @@ interface NexusStatus {
   last_calculated: string;
 }
 
+interface StateWithActivity {
+  state: string;
+  crossed_at: string | null;
+  crossed_by: string | null;
+  est_liability: number | null;
+  taxable_post_cross: number | null;
+  last_calculated: string | null;
+  total_revenue: number;
+  transaction_count: number;
+  has_nexus_record: boolean;
+}
+
 const Results = () => {
   const { user } = useAuth();
   const { currentOrg } = useOrganization();
   const { toast } = useToast();
-  const [nexusData, setNexusData] = useState<NexusStatus[]>([]);
-  const [selectedState, setSelectedState] = useState<NexusStatus | null>(null);
+  const [statesData, setStatesData] = useState<StateWithActivity[]>([]);
+  const [selectedState, setSelectedState] = useState<StateWithActivity | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [salesEventCount, setSalesEventCount] = useState(0);
@@ -33,31 +46,77 @@ const Results = () => {
 
   useEffect(() => {
     if (currentOrg) {
-      fetchNexusData();
+      fetchAllStatesData();
       fetchSalesEventCount();
     }
   }, [currentOrg]);
 
-  const fetchNexusData = async () => {
+  const fetchAllStatesData = async () => {
     if (!currentOrg) return;
 
     try {
-      console.log('Fetching nexus data for org:', currentOrg.id);
-      const { data, error } = await supabase
+      console.log('Fetching all states data for org:', currentOrg.id);
+      
+      // Get all states with sales activity
+      const { data: salesByState, error: salesError } = await supabase
+        .from('sales_events')
+        .select('ship_to_state, amount')
+        .eq('org_id', currentOrg.id);
+
+      if (salesError) {
+        console.error('Error fetching sales data:', salesError);
+        throw salesError;
+      }
+
+      // Get nexus status data
+      const { data: nexusData, error: nexusError } = await supabase
         .from('nexus_status')
         .select('*')
-        .eq('org_id', currentOrg.id)
-        .order('state');
+        .eq('org_id', currentOrg.id);
 
-      if (error) {
-        console.error('Error fetching nexus data:', error);
-        throw error;
+      if (nexusError) {
+        console.error('Error fetching nexus data:', nexusError);
+        throw nexusError;
       }
+
+      // Aggregate sales data by state
+      const stateAggregates = new Map<string, { revenue: number; count: number }>();
       
-      console.log('Nexus data received:', data);
-      setNexusData(data || []);
+      salesByState?.forEach(sale => {
+        const state = sale.ship_to_state;
+        const current = stateAggregates.get(state) || { revenue: 0, count: 0 };
+        current.revenue += sale.amount || 0;
+        current.count += 1;
+        stateAggregates.set(state, current);
+      });
+
+      // Combine sales data with nexus data
+      const combinedData: StateWithActivity[] = [];
+      const nexusMap = new Map(nexusData?.map(n => [n.state, n]) || []);
+
+      // Add all states with sales activity
+      stateAggregates.forEach((aggregate, state) => {
+        const nexusRecord = nexusMap.get(state);
+        combinedData.push({
+          state,
+          crossed_at: nexusRecord?.crossed_at || null,
+          crossed_by: nexusRecord?.crossed_by || null,
+          est_liability: nexusRecord?.est_liability || null,
+          taxable_post_cross: nexusRecord?.taxable_post_cross || null,
+          last_calculated: nexusRecord?.last_calculated || null,
+          total_revenue: aggregate.revenue,
+          transaction_count: aggregate.count,
+          has_nexus_record: !!nexusRecord
+        });
+      });
+
+      // Sort by state name
+      combinedData.sort((a, b) => a.state.localeCompare(b.state));
+      
+      console.log('Combined states data:', combinedData);
+      setStatesData(combinedData);
     } catch (error) {
-      console.error('Error fetching nexus data:', error);
+      console.error('Error fetching states data:', error);
       toast({
         title: "Error loading results",
         description: "There was an error loading your nexus analysis results.",
@@ -106,7 +165,7 @@ const Results = () => {
       });
 
       // Refresh the data
-      await fetchNexusData();
+      await fetchAllStatesData();
     } catch (error) {
       console.error('Error recomputing nexus:', error);
       toast({
@@ -119,13 +178,13 @@ const Results = () => {
     }
   };
 
-  const openModal = (state: NexusStatus) => {
+  const openModal = (state: StateWithActivity) => {
     setSelectedState(state);
     setIsModalOpen(true);
   };
 
   // Mock chart data for demonstration
-  const getChartData = (state: NexusStatus) => {
+  const getChartData = (state: StateWithActivity) => {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
     return months.map((month, index) => ({
       month,
@@ -172,11 +231,11 @@ const Results = () => {
               <span className="text-blue-800">Sales Events: {salesEventCount}</span>
             </div>
             <div className="bg-green-100 px-3 py-1 rounded-full">
-              <span className="text-green-800">States Analyzed: {nexusData.length}</span>
+              <span className="text-green-800">States with Activity: {statesData.length}</span>
             </div>
             <div className="bg-orange-100 px-3 py-1 rounded-full">
               <span className="text-orange-800">
-                Nexus Crossed: {nexusData.filter(s => s.crossed_at).length}
+                Nexus Crossed: {statesData.filter(s => s.crossed_at).length}
               </span>
             </div>
           </div>
@@ -187,7 +246,7 @@ const Results = () => {
             <CardTitle className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <MapPin className="h-5 w-5" />
-                Nexus Status by State
+                State Activity & Nexus Status
               </div>
               <Button 
                 onClick={recomputeNexus} 
@@ -200,34 +259,28 @@ const Results = () => {
               </Button>
             </CardTitle>
             <CardDescription>
-              {nexusData.length > 0 
-                ? "Click on any row to view detailed analysis"
-                : "No nexus analysis data found. Try refreshing the analysis or uploading sales data."
+              {statesData.length > 0 
+                ? "All states with sales activity. Click on any row to view detailed analysis"
+                : "No sales activity data found. Try uploading sales data first."
               }
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {nexusData.length === 0 ? (
+            {statesData.length === 0 ? (
               <div className="text-center py-12">
                 <AlertTriangle className="h-12 w-12 text-yellow-500 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">No Analysis Results</h3>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">No Sales Activity Found</h3>
                 <p className="text-gray-600 mb-4">
                   {salesEventCount === 0 
                     ? "No sales data found. Please upload your sales data first."
-                    : "Analysis data not found. The compute_nexus function may need to be run."
+                    : "No state-level sales activity detected."
                   }
                 </p>
                 <div className="space-y-2">
-                  <Button onClick={recomputeNexus} disabled={isRecomputing}>
-                    <RefreshCw className={`h-4 w-4 mr-2 ${isRecomputing ? 'animate-spin' : ''}`} />
-                    {isRecomputing ? 'Computing...' : 'Run Analysis'}
-                  </Button>
                   {salesEventCount === 0 && (
-                    <div>
-                      <Button variant="outline" onClick={() => window.location.href = '/upload'}>
-                        Upload Sales Data
-                      </Button>
-                    </div>
+                    <Button variant="outline" onClick={() => window.location.href = '/upload'}>
+                      Upload Sales Data
+                    </Button>
                   )}
                 </div>
               </div>
@@ -238,6 +291,8 @@ const Results = () => {
                     <TableRow>
                       <TableHead>State</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead>Total Revenue</TableHead>
+                      <TableHead>Transactions</TableHead>
                       <TableHead>Crossed Date</TableHead>
                       <TableHead>Triggered By</TableHead>
                       <TableHead>Est. Liability</TableHead>
@@ -245,7 +300,7 @@ const Results = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {nexusData.map((state, index) => (
+                    {statesData.map((state, index) => (
                       <TableRow 
                         key={state.state}
                         className={`hover:bg-gray-50 cursor-pointer ${index % 2 === 0 ? 'bg-gray-25' : ''}`}
@@ -256,6 +311,12 @@ const Results = () => {
                           <Badge variant={state.crossed_at ? 'destructive' : 'secondary'}>
                             {state.crossed_at ? 'Crossed' : 'Monitoring'}
                           </Badge>
+                        </TableCell>
+                        <TableCell>
+                          ${state.total_revenue.toLocaleString()}
+                        </TableCell>
+                        <TableCell>
+                          {state.transaction_count.toLocaleString()}
                         </TableCell>
                         <TableCell>
                           {state.crossed_at ? new Date(state.crossed_at).toLocaleDateString() : '-'}
@@ -296,7 +357,25 @@ const Results = () => {
             
             {selectedState && (
               <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <Card>
+                    <CardContent className="p-4">
+                      <div className="text-sm text-gray-600">Total Revenue</div>
+                      <div className="text-lg font-semibold">
+                        ${selectedState.total_revenue.toLocaleString()}
+                      </div>
+                    </CardContent>
+                  </Card>
+                  
+                  <Card>
+                    <CardContent className="p-4">
+                      <div className="text-sm text-gray-600">Transactions</div>
+                      <div className="text-lg font-semibold">
+                        {selectedState.transaction_count.toLocaleString()}
+                      </div>
+                    </CardContent>
+                  </Card>
+                  
                   <Card>
                     <CardContent className="p-4">
                       <div className="text-sm text-gray-600">Crossed Date</div>
@@ -314,15 +393,6 @@ const Results = () => {
                       <div className="text-sm text-gray-600">Estimated Liability</div>
                       <div className="text-lg font-semibold">
                         ${selectedState.est_liability?.toLocaleString() || '0'}
-                      </div>
-                    </CardContent>
-                  </Card>
-                  
-                  <Card>
-                    <CardContent className="p-4">
-                      <div className="text-sm text-gray-600">Taxable Revenue</div>
-                      <div className="text-lg font-semibold">
-                        ${selectedState.taxable_post_cross?.toLocaleString() || '0'}
                       </div>
                     </CardContent>
                   </Card>
