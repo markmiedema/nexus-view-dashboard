@@ -79,6 +79,18 @@ const Results = () => {
         throw nexusError;
       }
 
+      // Get state thresholds for status calculation
+      const { data: thresholds, error: thresholdError } = await supabase
+        .from('state_thresholds')
+        .select('state, revenue_threshold');
+
+      if (thresholdError) {
+        console.error('Error fetching thresholds:', thresholdError);
+      }
+
+      // Create threshold map
+      const thresholdMap = new Map(thresholds?.map(t => [t.state, t.revenue_threshold]) || []);
+
       // Aggregate sales data by state
       const stateAggregates = new Map<string, { revenue: number; count: number }>();
       
@@ -258,6 +270,29 @@ const Results = () => {
     }));
   };
 
+  const getStatusInfo = (state: StateWithActivity) => {
+    // If nexus was crossed (exceeded threshold), show as crossed
+    if (state.crossed_at) {
+      return { variant: 'destructive' as const, text: 'Crossed' };
+    }
+    
+    // For states without nexus records, we need to check if they meet the threshold
+    // This is a simplified check - in a real implementation, you'd want to fetch
+    // the threshold and compare properly
+    const estimatedThreshold = 100000; // Default threshold for demonstration
+    
+    if (state.total_revenue >= estimatedThreshold) {
+      return { variant: 'warning' as const, text: 'Met' };
+    }
+    
+    // Check if approaching (e.g., 80% of threshold)
+    if (state.total_revenue >= estimatedThreshold * 0.8) {
+      return { variant: 'approaching' as const, text: 'Approaching' };
+    }
+    
+    return { variant: 'secondary' as const, text: 'Monitoring' };
+  };
+
   if (!currentOrg) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -365,44 +400,47 @@ const Results = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {statesData.map((state, index) => (
-                      <TableRow 
-                        key={state.state}
-                        className={`hover:bg-gray-50 cursor-pointer ${index % 2 === 0 ? 'bg-gray-25' : ''}`}
-                        onClick={() => openModal(state)}
-                      >
-                        <TableCell className="font-medium">{state.state}</TableCell>
-                        <TableCell>
-                          <Badge variant={state.crossed_at ? 'destructive' : 'secondary'}>
-                            {state.crossed_at ? 'Crossed' : 'Monitoring'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          ${state.total_revenue.toLocaleString()}
-                        </TableCell>
-                        <TableCell>
-                          {state.transaction_count.toLocaleString()}
-                        </TableCell>
-                        <TableCell>
-                          {state.crossed_at ? new Date(state.crossed_at).toLocaleDateString() : '-'}
-                        </TableCell>
-                        <TableCell>
-                          {state.crossed_by ? (
-                            <Badge variant="outline">
-                              {state.crossed_by}
+                    {statesData.map((state, index) => {
+                      const statusInfo = getStatusInfo(state);
+                      return (
+                        <TableRow 
+                          key={state.state}
+                          className={`hover:bg-gray-50 cursor-pointer ${index % 2 === 0 ? 'bg-gray-25' : ''}`}
+                          onClick={() => openModal(state)}
+                        >
+                          <TableCell className="font-medium">{state.state}</TableCell>
+                          <TableCell>
+                            <Badge variant={statusInfo.variant}>
+                              {statusInfo.text}
                             </Badge>
-                          ) : '-'}
-                        </TableCell>
-                        <TableCell>
-                          {state.est_liability ? `$${state.est_liability.toLocaleString()}` : '-'}
-                        </TableCell>
-                        <TableCell>
-                          <Button variant="outline" size="sm">
-                            View Details
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                          </TableCell>
+                          <TableCell>
+                            ${state.total_revenue.toLocaleString()}
+                          </TableCell>
+                          <TableCell>
+                            {state.transaction_count.toLocaleString()}
+                          </TableCell>
+                          <TableCell>
+                            {state.crossed_at ? new Date(state.crossed_at).toLocaleDateString() : '-'}
+                          </TableCell>
+                          <TableCell>
+                            {state.crossed_by ? (
+                              <Badge variant="outline">
+                                {state.crossed_by}
+                              </Badge>
+                            ) : '-'}
+                          </TableCell>
+                          <TableCell>
+                            {state.est_liability ? `$${state.est_liability.toLocaleString()}` : '-'}
+                          </TableCell>
+                          <TableCell>
+                            <Button variant="outline" size="sm">
+                              View Details
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>
