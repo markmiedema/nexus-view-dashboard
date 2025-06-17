@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrganization } from '@/contexts/OrganizationContext';
@@ -157,25 +158,26 @@ const Results = () => {
 
       if (error) throw error;
 
-      // Group by month and calculate cumulative revenue
-      const monthlyData = new Map();
+      console.log(`Raw sales events for ${state}:`, salesEvents);
+
+      // Calculate cumulative revenue for each transaction
+      const chartPoints: any[] = [];
       let cumulativeRevenue = 0;
 
-      salesEvents?.forEach(event => {
-        const date = new Date(event.transaction_date);
-        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-        const monthName = date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-        
+      salesEvents?.forEach((event, index) => {
         cumulativeRevenue += event.amount || 0;
         
-        monthlyData.set(monthKey, {
-          month: monthName,
+        chartPoints.push({
+          transaction: index + 1,
+          date: new Date(event.transaction_date).toLocaleDateString(),
           revenue: cumulativeRevenue,
           threshold: 100000, // Standard threshold - could be made dynamic based on state
+          amount: event.amount
         });
       });
 
-      return Array.from(monthlyData.values());
+      console.log(`Chart data for ${state}:`, chartPoints);
+      return chartPoints;
     } catch (error) {
       console.error('Error fetching chart data:', error);
       return [];
@@ -443,16 +445,33 @@ const Results = () => {
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-lg">Revenue vs Threshold</CardTitle>
-                    <CardDescription>Cumulative revenue progression based on actual sales data</CardDescription>
+                    <CardDescription>Cumulative revenue progression showing each transaction</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="h-64">
                       <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={chartData}>
                           <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="month" />
-                          <YAxis />
-                          <Tooltip formatter={(value: number) => [`$${value.toLocaleString()}`, 'Revenue']} />
+                          <XAxis 
+                            dataKey="transaction" 
+                            label={{ value: 'Transaction #', position: 'insideBottom', offset: -5 }}
+                          />
+                          <YAxis 
+                            label={{ value: 'Revenue ($)', angle: -90, position: 'insideLeft' }}
+                            tickFormatter={(value) => `$${value.toLocaleString()}`}
+                          />
+                          <Tooltip 
+                            formatter={(value: number, name: string) => {
+                              if (name === 'Cumulative Revenue') {
+                                return [`$${value.toLocaleString()}`, name];
+                              }
+                              if (name === 'Threshold') {
+                                return [`$${value.toLocaleString()}`, name];
+                              }
+                              return [value, name];
+                            }}
+                            labelFormatter={(label) => `Transaction ${label}`}
+                          />
                           <Line 
                             type="monotone" 
                             dataKey="revenue" 
