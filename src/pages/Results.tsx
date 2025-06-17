@@ -1,5 +1,3 @@
-
-
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrganization } from '@/contexts/OrganizationContext';
@@ -9,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { MapPin, TrendingUp, AlertTriangle, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -177,16 +175,25 @@ const Results = () => {
       // Calculate cumulative revenue for each transaction
       const chartPoints: any[] = [];
       let cumulativeRevenue = 0;
+      let hasExceededThreshold = false;
 
       salesEvents?.forEach((event, index) => {
         cumulativeRevenue += event.amount || 0;
+        
+        // Check if this transaction causes us to exceed (not just meet) the threshold
+        if (cumulativeRevenue > threshold && !hasExceededThreshold) {
+          hasExceededThreshold = true;
+        }
         
         chartPoints.push({
           transaction: index + 1,
           date: new Date(event.transaction_date).toLocaleDateString(),
           revenue: cumulativeRevenue,
           threshold: threshold,
-          amount: event.amount
+          amount: event.amount,
+          hasExceededThreshold: hasExceededThreshold,
+          meetsThreshold: cumulativeRevenue >= threshold,
+          exceedsThreshold: cumulativeRevenue > threshold
         });
       });
 
@@ -459,7 +466,18 @@ const Results = () => {
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-lg">Revenue vs Threshold</CardTitle>
-                    <CardDescription>Cumulative revenue progression showing each transaction</CardDescription>
+                    <CardDescription>
+                      Cumulative revenue progression showing each transaction. 
+                      {selectedState && chartData.length > 0 && (
+                        <>
+                          {chartData.some(point => point.exceedsThreshold) 
+                            ? " Nexus threshold has been exceeded." 
+                            : chartData.some(point => point.meetsThreshold)
+                            ? " Revenue meets but has not exceeded the nexus threshold."
+                            : " Revenue has not reached the nexus threshold."}
+                        </>
+                      )}
+                    </CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="h-80">
@@ -486,7 +504,20 @@ const Results = () => {
                               }
                               return [value, name];
                             }}
-                            labelFormatter={(label) => `Transaction ${label}`}
+                            labelFormatter={(label, payload) => {
+                              const point = payload?.[0]?.payload;
+                              let status = '';
+                              if (point) {
+                                if (point.exceedsThreshold) {
+                                  status = ' (Threshold Exceeded)';
+                                } else if (point.meetsThreshold) {
+                                  status = ' (Threshold Met)';
+                                } else {
+                                  status = ' (Below Threshold)';
+                                }
+                              }
+                              return `Transaction ${label}${status}`;
+                            }}
                             contentStyle={{
                               backgroundColor: 'white',
                               border: '1px solid #e5e7eb',
@@ -528,4 +559,3 @@ const Results = () => {
 };
 
 export default Results;
-
