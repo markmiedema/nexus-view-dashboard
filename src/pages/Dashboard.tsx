@@ -41,13 +41,14 @@ const Dashboard = () => {
   const { currentOrg, organizations } = useOrganization();
   const { toast } = useToast();
   const [nexusStates, setNexusStates] = useState([]);
-  const [recentSales, setRecentSales] = useState([]);
   const [statesData, setStatesData] = useState<StateWithActivity[]>([]);
   const [selectedState, setSelectedState] = useState<StateWithActivity | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [salesEventCount, setSalesEventCount] = useState(0);
   const [isRecomputing, setIsRecomputing] = useState(false);
   const [chartData, setChartData] = useState<any[]>([]);
+  const [mainChartData, setMainChartData] = useState<any[]>([]);
+  const [mainChartState, setMainChartState] = useState<StateWithActivity | null>(null);
   const [stats, setStats] = useState({
     totalRevenue: 0,
     activeNexusStates: 0,
@@ -64,6 +65,15 @@ const Dashboard = () => {
     }
   }, [currentOrg]);
 
+  useEffect(() => {
+    // When states data is loaded, fetch chart data for the first state
+    if (statesData.length > 0 && !mainChartState) {
+      const firstState = statesData[0];
+      setMainChartState(firstState);
+      fetchMainChartData(firstState.state);
+    }
+  }, [statesData, mainChartState]);
+
   const fetchDashboardData = async () => {
     if (!currentOrg) return;
 
@@ -76,16 +86,6 @@ const Dashboard = () => {
         .order('state');
 
       if (nexusError) throw nexusError;
-
-      // Fetch recent sales for current org
-      const { data: salesData, error: salesError } = await supabase
-        .from('sales_events')
-        .select('*')
-        .eq('org_id', currentOrg.id)
-        .order('transaction_date', { ascending: false })
-        .limit(3);
-
-      if (salesError) throw salesError;
 
       // Calculate stats
       const activeNexus = (nexusData || []).filter(n => n.crossed_at).length;
@@ -105,12 +105,6 @@ const Dashboard = () => {
       const monthlyRevenue = (monthSales || []).reduce((sum, s) => sum + s.amount, 0);
 
       setNexusStates(nexusData || []);
-      setRecentSales((salesData || []).map(sale => ({
-        date: new Date(sale.transaction_date).toLocaleDateString(),
-        amount: sale.amount,
-        state: sale.ship_to_state,
-        tax: sale.sales_tax
-      })));
       
       setStats({
         totalRevenue: monthlyRevenue,
@@ -281,6 +275,11 @@ const Dashboard = () => {
       console.error('Error fetching chart data:', error);
       return [];
     }
+  };
+
+  const fetchMainChartData = async (state: string) => {
+    const data = await fetchChartData(state);
+    setMainChartData(data);
   };
 
   const recomputeNexus = async () => {
@@ -800,35 +799,103 @@ const Dashboard = () => {
             </CardContent>
           </Card>
 
-          {/* Recent Sales */}
+          {/* Revenue vs Threshold Chart */}
           <Card className="rounded-2xl shadow-lg">
             <CardHeader>
-              <CardTitle>Recent Sales Activity</CardTitle>
-              <CardDescription>Latest transactions across all states</CardDescription>
+              <CardTitle className="text-lg">Revenue vs Threshold</CardTitle>
+              <CardDescription>
+                {mainChartState ? (
+                  <>
+                    Cumulative revenue progression for {mainChartState.state}.
+                    {mainChartData.length > 0 && (
+                      <>
+                        {mainChartData.some(point => point.exceedsThreshold) 
+                          ? " Nexus threshold has been exceeded." 
+                          : mainChartData.some(point => point.meetsThreshold)
+                          ? " Revenue meets but has not exceeded the nexus threshold."
+                          : " Revenue has not reached the nexus threshold."}
+                      </>
+                    )}
+                  </>
+                ) : (
+                  "No sales data available for chart display"
+                )}
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {recentSales.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
-                    No sales data available for this organization
-                  </div>
-                ) : (
-                  recentSales.map((sale, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50">
-                      <div>
-                        <div className="font-medium">${sale.amount.toFixed(2)}</div>
-                        <div className="text-sm text-gray-500">{sale.date}</div>
-                      </div>
-                      <div className="text-right">
-                        <div className="font-medium">{sale.state}</div>
-                        <div className="text-sm text-gray-500">
-                          Tax: ${sale.tax.toFixed(2)}
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
+              {mainChartData.length > 0 ? (
+                <div className="h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={mainChartData} margin={{ top: 20, right: 30, left: 40, bottom: 60 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e0e7ff" />
+                      <XAxis 
+                        dataKey="transaction" 
+                        label={{ value: 'Transaction #', position: 'insideBottom', offset: -10 }}
+                        tick={{ fontSize: 12 }}
+                      />
+                      <YAxis 
+                        label={{ value: 'Revenue ($)', angle: -90, position: 'insideLeft' }}
+                        tickFormatter={(value) => `$${(value / 1000).toFixed(0)}K`}
+                        tick={{ fontSize: 12 }}
+                      />
+                      <Tooltip 
+                        formatter={(value: number, name: string) => {
+                          if (name === 'Cumulative Revenue') {
+                            return [`$${value.toLocaleString()}`, name];
+                          }
+                          if (name === 'Nexus Threshold') {
+                            return [`$${value.toLocaleString()}`, name];
+                          }
+                          return [value, name];
+                        }}
+                        labelFormatter={(label, payload) => {
+                          const point = payload?.[0]?.payload;
+                          let status = '';
+                          if (point) {
+                            if (point.exceedsThreshold) {
+                              status = ' (Threshold Exceeded)';
+                            } else if (point.meetsThreshold) {
+                              status = ' (Threshold Met)';
+                            } else {
+                              status = ' (Below Threshold)';
+                            }
+                          }
+                          return `Transaction ${label}${status}`;
+                        }}
+                        contentStyle={{
+                          backgroundColor: 'white',
+                          border: '1px solid #e5e7eb',
+                          borderRadius: '8px',
+                          fontSize: '12px'
+                        }}
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="revenue" 
+                        stroke="#2563eb" 
+                        strokeWidth={3}
+                        name="Cumulative Revenue"
+                        dot={{ fill: '#2563eb', strokeWidth: 2, r: 4 }}
+                        activeDot={{ r: 6, stroke: '#2563eb', strokeWidth: 2 }}
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="threshold" 
+                        stroke="#dc2626" 
+                        strokeWidth={2} 
+                        strokeDasharray="8 4"
+                        name="Nexus Threshold"
+                        dot={false}
+                        activeDot={false}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  No chart data available for this organization
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
