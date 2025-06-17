@@ -22,8 +22,8 @@ function AppRoutes() {
   
   return (
     <Routes>
-      <Route path="/" element={user ? <Navigate to="/organizations" /> : <Index />} />
-      <Route path="/auth" element={user ? <Navigate to="/organizations" /> : <Auth />} />
+      <Route path="/" element={user ? <Navigate to="/dashboard" /> : <Index />} />
+      <Route path="/auth" element={user ? <Navigate to="/dashboard" /> : <Auth />} />
       <Route path="/organizations" element={
         <ProtectedRoute>
           <OrganizationList />
