@@ -14,7 +14,7 @@ interface Organization {
 interface OrganizationContextType {
   currentOrg: Organization | null;
   organizations: Organization[];
-  setCurrentOrg: (org: Organization) => void;
+  setCurrentOrg: (org: Organization | null) => void;
   isLoading: boolean;
   refetchOrganizations: () => Promise<void>;
 }
@@ -67,8 +67,11 @@ export const OrganizationProvider = ({ children }: { children: ReactNode }) => {
       console.log('Fetched organizations:', orgs);
       setOrganizations(orgs);
       
-      if (orgs.length > 0 && !currentOrg) {
-        setCurrentOrg(orgs[0]);
+      // Don't auto-select an organization - let user choose from personal dashboard
+      // Only auto-select if there was already one selected and it still exists
+      if (currentOrg && orgs.find(org => org.id === currentOrg.id)) {
+        const updatedCurrentOrg = orgs.find(org => org.id === currentOrg.id);
+        setCurrentOrg(updatedCurrentOrg || null);
       }
     } catch (error) {
       console.error('Error fetching organizations:', error);

@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { OrganizationSwitcher } from '@/components/OrganizationSwitcher';
-import { AlertTriangle, TrendingUp, MapPin, DollarSign, Upload, Settings, RefreshCw, Trash2 } from 'lucide-react';
+import { AlertTriangle, TrendingUp, MapPin, DollarSign, Upload, Settings, RefreshCw, Trash2, Building2, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
@@ -38,7 +38,7 @@ interface StateWithActivity {
 
 const Dashboard = () => {
   const { user, signOut } = useAuth();
-  const { currentOrg } = useOrganization();
+  const { currentOrg, organizations } = useOrganization();
   const { toast } = useToast();
   const [nexusStates, setNexusStates] = useState([]);
   const [recentSales, setRecentSales] = useState([]);
@@ -400,6 +400,7 @@ const Dashboard = () => {
     return { variant: 'secondary' as const, text: 'Monitoring' };
   };
 
+  // Personal Dashboard View (when no organization selected)
   if (!currentOrg) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -427,14 +428,115 @@ const Dashboard = () => {
             </div>
           </div>
         </header>
+
         <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-          <div className="text-center py-12">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">No Organization Selected</h2>
-            <p className="text-gray-600 mb-6">Please select an organization or create a new one to view your dashboard.</p>
-            <Button asChild>
-              <Link to="/settings">Go to Settings</Link>
-            </Button>
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Your Personal Dashboard</h2>
+            <p className="text-gray-600">Welcome back! Select an organization to manage nexus compliance or create a new one.</p>
           </div>
+
+          {/* Personal Overview Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <Card className="rounded-2xl shadow-lg">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Organizations</CardTitle>
+                <Building2 className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{organizations.length}</div>
+                <p className="text-xs text-muted-foreground">Total organizations</p>
+              </CardContent>
+            </Card>
+
+            <Card className="rounded-2xl shadow-lg">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Your Role</CardTitle>
+                <Users className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">SALT</div>
+                <p className="text-xs text-muted-foreground">Accountant</p>
+              </CardContent>
+            </Card>
+
+            <Card className="rounded-2xl shadow-lg">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Quick Access</CardTitle>
+                <MapPin className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <Button asChild size="sm" className="w-full">
+                  <Link to="/organizations">
+                    View All Organizations
+                  </Link>
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Organizations Overview */}
+          <Card className="rounded-2xl shadow-lg">
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Building2 className="h-5 w-5" />
+                  Your Organizations
+                </div>
+                <Button asChild size="sm">
+                  <Link to="/organizations">
+                    View All
+                  </Link>
+                </Button>
+              </CardTitle>
+              <CardDescription>
+                Select an organization to view its nexus compliance dashboard
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {organizations.length === 0 ? (
+                <div className="text-center py-8">
+                  <Building2 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No organizations yet</h3>
+                  <p className="text-gray-600 mb-4">Create your first organization to get started with nexus tracking.</p>
+                  <Button asChild>
+                    <Link to="/organizations">
+                      Create Organization
+                    </Link>
+                  </Button>
+                </div>
+              ) : (
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {organizations.slice(0, 6).map((org) => (
+                    <Card 
+                      key={org.id} 
+                      className="cursor-pointer hover:shadow-md transition-shadow"
+                      onClick={() => window.location.href = `/dashboard?org=${org.id}`}
+                    >
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-sm font-medium flex items-center gap-2">
+                          <Building2 className="h-4 w-4 text-blue-500" />
+                          {org.name}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="flex items-center justify-between">
+                          <Badge variant="outline" className="text-xs">
+                            {org.role}
+                          </Badge>
+                          <span className="text-xs text-gray-500">
+                            {org.created_at ? new Date(org.created_at).toLocaleDateString() : 'Unknown'}
+                          </span>
+                        </div>
+                        <Button size="sm" className="w-full mt-3" variant="outline">
+                          Open Dashboard
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </main>
       </div>
     );
