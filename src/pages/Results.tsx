@@ -1,4 +1,5 @@
 
+
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrganization } from '@/contexts/OrganizationContext';
@@ -149,6 +150,19 @@ const Results = () => {
     if (!currentOrg) return [];
 
     try {
+      // Get the state's threshold
+      const { data: thresholdData, error: thresholdError } = await supabase
+        .from('state_thresholds')
+        .select('revenue_threshold')
+        .eq('state', state)
+        .single();
+
+      if (thresholdError) {
+        console.error('Error fetching threshold:', thresholdError);
+      }
+
+      const threshold = thresholdData?.revenue_threshold || 100000;
+
       const { data: salesEvents, error } = await supabase
         .from('sales_events')
         .select('transaction_date, amount')
@@ -171,7 +185,7 @@ const Results = () => {
           transaction: index + 1,
           date: new Date(event.transaction_date).toLocaleDateString(),
           revenue: cumulativeRevenue,
-          threshold: 100000, // Standard threshold - could be made dynamic based on state
+          threshold: threshold,
           amount: event.amount
         });
       });
@@ -448,44 +462,56 @@ const Results = () => {
                     <CardDescription>Cumulative revenue progression showing each transaction</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="h-64">
+                    <div className="h-80">
                       <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={chartData}>
-                          <CartesianGrid strokeDasharray="3 3" />
+                        <LineChart data={chartData} margin={{ top: 20, right: 30, left: 40, bottom: 60 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e0e7ff" />
                           <XAxis 
                             dataKey="transaction" 
-                            label={{ value: 'Transaction #', position: 'insideBottom', offset: -5 }}
+                            label={{ value: 'Transaction #', position: 'insideBottom', offset: -10 }}
+                            tick={{ fontSize: 12 }}
                           />
                           <YAxis 
                             label={{ value: 'Revenue ($)', angle: -90, position: 'insideLeft' }}
-                            tickFormatter={(value) => `$${value.toLocaleString()}`}
+                            tickFormatter={(value) => `$${(value / 1000).toFixed(0)}K`}
+                            tick={{ fontSize: 12 }}
                           />
                           <Tooltip 
                             formatter={(value: number, name: string) => {
                               if (name === 'Cumulative Revenue') {
                                 return [`$${value.toLocaleString()}`, name];
                               }
-                              if (name === 'Threshold') {
+                              if (name === 'Nexus Threshold') {
                                 return [`$${value.toLocaleString()}`, name];
                               }
                               return [value, name];
                             }}
                             labelFormatter={(label) => `Transaction ${label}`}
+                            contentStyle={{
+                              backgroundColor: 'white',
+                              border: '1px solid #e5e7eb',
+                              borderRadius: '8px',
+                              fontSize: '12px'
+                            }}
                           />
                           <Line 
                             type="monotone" 
                             dataKey="revenue" 
                             stroke="#2563eb" 
-                            strokeWidth={2}
+                            strokeWidth={3}
                             name="Cumulative Revenue"
+                            dot={{ fill: '#2563eb', strokeWidth: 2, r: 4 }}
+                            activeDot={{ r: 6, stroke: '#2563eb', strokeWidth: 2 }}
                           />
                           <Line 
                             type="monotone" 
                             dataKey="threshold" 
                             stroke="#dc2626" 
                             strokeWidth={2} 
-                            strokeDasharray="5 5"
-                            name="Threshold"
+                            strokeDasharray="8 4"
+                            name="Nexus Threshold"
+                            dot={false}
+                            activeDot={false}
                           />
                         </LineChart>
                       </ResponsiveContainer>
@@ -502,3 +528,4 @@ const Results = () => {
 };
 
 export default Results;
+
