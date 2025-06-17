@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrganization } from '@/contexts/OrganizationContext';
@@ -43,6 +42,7 @@ const Results = () => {
   const [loading, setLoading] = useState(true);
   const [salesEventCount, setSalesEventCount] = useState(0);
   const [isRecomputing, setIsRecomputing] = useState(false);
+  const [chartData, setChartData] = useState<any[]>([]);
 
   useEffect(() => {
     if (currentOrg) {
@@ -144,6 +144,44 @@ const Results = () => {
     }
   };
 
+  const fetchChartData = async (state: string) => {
+    if (!currentOrg) return [];
+
+    try {
+      const { data: salesEvents, error } = await supabase
+        .from('sales_events')
+        .select('transaction_date, amount')
+        .eq('org_id', currentOrg.id)
+        .eq('ship_to_state', state)
+        .order('transaction_date', { ascending: true });
+
+      if (error) throw error;
+
+      // Group by month and calculate cumulative revenue
+      const monthlyData = new Map();
+      let cumulativeRevenue = 0;
+
+      salesEvents?.forEach(event => {
+        const date = new Date(event.transaction_date);
+        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        const monthName = date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+        
+        cumulativeRevenue += event.amount || 0;
+        
+        monthlyData.set(monthKey, {
+          month: monthName,
+          revenue: cumulativeRevenue,
+          threshold: 100000, // Standard threshold - could be made dynamic based on state
+        });
+      });
+
+      return Array.from(monthlyData.values());
+    } catch (error) {
+      console.error('Error fetching chart data:', error);
+      return [];
+    }
+  };
+
   const recomputeNexus = async () => {
     if (!currentOrg) return;
 
@@ -178,9 +216,13 @@ const Results = () => {
     }
   };
 
-  const openModal = (state: StateWithActivity) => {
+  const openModal = async (state: StateWithActivity) => {
     setSelectedState(state);
     setIsModalOpen(true);
+    
+    // Fetch real chart data for this state
+    const realChartData = await fetchChartData(state.state);
+    setChartData(realChartData);
   };
 
   // Mock chart data for demonstration
@@ -401,12 +443,12 @@ const Results = () => {
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-lg">Revenue vs Threshold</CardTitle>
-                    <CardDescription>Cumulative revenue progression</CardDescription>
+                    <CardDescription>Cumulative revenue progression based on actual sales data</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="h-64">
                       <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={getChartData(selectedState)}>
+                        <LineChart data={chartData}>
                           <CartesianGrid strokeDasharray="3 3" />
                           <XAxis dataKey="month" />
                           <YAxis />
