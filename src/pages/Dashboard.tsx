@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { OrganizationSwitcher } from '@/components/OrganizationSwitcher';
-import { AlertTriangle, TrendingUp, MapPin, DollarSign, Upload } from 'lucide-react';
+import { AlertTriangle, TrendingUp, MapPin, DollarSign, Upload, Settings } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const Dashboard = () => {
@@ -40,6 +40,12 @@ const Dashboard = () => {
               <OrganizationSwitcher />
             </div>
             <div className="flex items-center space-x-4">
+              <Button variant="ghost" size="sm" asChild>
+                <Link to="/settings">
+                  <Settings className="h-4 w-4 mr-2" />
+                  Settings
+                </Link>
+              </Button>
               <span className="text-sm text-gray-600">
                 Welcome, {user?.email}
               </span>
