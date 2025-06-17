@@ -8,6 +8,7 @@ import { useAuth, AuthProvider } from "@/hooks/useAuth";
 import { OrganizationProvider } from "@/contexts/OrganizationContext";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
+import OrganizationList from "./pages/OrganizationList";
 import Dashboard from "./pages/Dashboard";
 import Upload from "./pages/Upload";
 import Settings from "./pages/Settings";
@@ -21,8 +22,13 @@ function AppRoutes() {
   
   return (
     <Routes>
-      <Route path="/" element={user ? <Navigate to="/dashboard" /> : <Index />} />
-      <Route path="/auth" element={user ? <Navigate to="/dashboard" /> : <Auth />} />
+      <Route path="/" element={user ? <Navigate to="/organizations" /> : <Index />} />
+      <Route path="/auth" element={user ? <Navigate to="/organizations" /> : <Auth />} />
+      <Route path="/organizations" element={
+        <ProtectedRoute>
+          <OrganizationList />
+        </ProtectedRoute>
+      } />
       <Route path="/dashboard" element={
         <ProtectedRoute>
           <Dashboard />
