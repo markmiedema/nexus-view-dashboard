@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { OrganizationSwitcher } from '@/components/OrganizationSwitcher';
 import { AlertTriangle, TrendingUp, MapPin, DollarSign, Upload, Settings, RefreshCw, Trash2, Building2, Users } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -38,7 +38,8 @@ interface StateWithActivity {
 
 const Dashboard = () => {
   const { user, signOut } = useAuth();
-  const { currentOrg, organizations } = useOrganization();
+  const { currentOrg, organizations, setCurrentOrg } = useOrganization();
+  const navigate = useNavigate();
   const { toast } = useToast();
   const [nexusStates, setNexusStates] = useState([]);
   const [statesData, setStatesData] = useState<StateWithActivity[]>([]);
@@ -73,6 +74,11 @@ const Dashboard = () => {
       fetchMainChartData(firstState.state);
     }
   }, [statesData, mainChartState]);
+
+  const handleOrgSelect = (org: any) => {
+    setCurrentOrg(org);
+    // Navigate will trigger a re-render with the new currentOrg
+  };
 
   const fetchDashboardData = async () => {
     if (!currentOrg) return;
@@ -509,7 +515,7 @@ const Dashboard = () => {
                     <Card 
                       key={org.id} 
                       className="cursor-pointer hover:shadow-md transition-shadow"
-                      onClick={() => window.location.href = `/dashboard?org=${org.id}`}
+                      onClick={() => handleOrgSelect(org)}
                     >
                       <CardHeader className="pb-3">
                         <CardTitle className="text-sm font-medium flex items-center gap-2">
