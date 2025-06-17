@@ -7,17 +7,19 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useOrganization } from '@/contexts/OrganizationContext';
 import { Upload, FileSpreadsheet, Loader2 } from 'lucide-react';
 
 const UploadPage = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [progress, setProgress] = useState('');
   const { user } = useAuth();
+  const { currentOrg } = useOrganization();
   const { toast } = useToast();
   const navigate = useNavigate();
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
-    if (!user) return;
+    if (!user || !currentOrg) return;
     
     const file = acceptedFiles[0];
     if (!file) return;
@@ -41,7 +43,7 @@ const UploadPage = () => {
         body: {
           bucket: 'uploads',
           path: fileName,
-          org_id: user.id // Using user.id as org_id for now
+          org_id: currentOrg.id // Use currentOrg.id instead of user.id
         }
       });
 
@@ -67,7 +69,7 @@ const UploadPage = () => {
       setIsUploading(false);
       setProgress('');
     }
-  }, [user, toast, navigate]);
+  }, [user, currentOrg, toast, navigate]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -80,11 +82,25 @@ const UploadPage = () => {
     disabled: isUploading
   });
 
+  if (!currentOrg) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">No Organization Selected</h2>
+          <p className="text-gray-600 mb-6">Please select an organization to upload data.</p>
+          <Button onClick={() => navigate('/dashboard')}>
+            Go to Dashboard
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-4xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Upload Sales Data</h1>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Upload Sales Data - {currentOrg.name}</h1>
           <p className="text-gray-600">Upload your sales data CSV to analyze nexus status</p>
         </div>
 
