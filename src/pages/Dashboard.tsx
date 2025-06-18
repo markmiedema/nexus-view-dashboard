@@ -365,10 +365,20 @@ const Dashboard = () => {
         description: "All sales data and nexus analysis have been removed for this organization.",
       });
 
-      // Refresh the data
-      await fetchDashboardData();
-      await fetchAllStatesData();
-      await fetchSalesEventCount();
+      // Reset all local state to empty/zero values
+      setNexusStates([]);
+      setStatesData([]);
+      setSalesEventCount(0);
+      setStats({
+        totalRevenue: 0,
+        activeNexusStates: 0,
+        estimatedLiability: 0,
+        salesThisMonth: 0
+      });
+      setMainChartData([]);
+      setMainChartState(null);
+      setChartData([]);
+
     } catch (error) {
       console.error('Error clearing data:', error);
       toast({
